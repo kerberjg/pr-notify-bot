@@ -1,0 +1,37 @@
+{
+    "name": "pr-notify-bot",
+    "description": "GitHub PR bot - notifies via BlueSky when an update to a PR has been made (open/draft/merge/close)",
+    "version": "0.1.0",
+    "license": "MPL-2.0",
+    "type": "module",
+    "keywords": [
+        "github",
+        "pull request",
+        "bot",
+        "bluesky",
+        "typescript"
+    ],
+    "scripts": {
+        "start": "node --enable-source-maps build/index.js",
+        "typecheck": "npm run typecheck:src",
+        "typecheck:src": "tsc --noEmit --project tsconfig.build.json",
+        "lint": "npm run lint:src",
+        "lint:src": "eslint src/",
+        "clean": "npm run clean:src",
+        "clean:src": "rm -rf ./build ./src/types",
+        "build": "npm run build:src",
+        "build:src": "tsc -p tsconfig.build.json"
+    },
+    "dependencies": {
+        "@atcute/bluesky-richtext-builder": "^1.0.2",
+        "@atproto/api": "^0.13.18",
+        "cheerio": "^1.0.0",
+        "cron": "^3.2.1",
+        "dotenv": "^16.4.5",
+        "octokit": "^4.0.2"
+    },
+    "devDependencies": {
+        "@types/node": "^22.9.0",
+        "typescript": "^5.7.2"
+    }
+}
