@@ -120,7 +120,6 @@ export class GithubService extends Service {
                 satisfied = true;
             }
             else {
-
                 // if last PR is older than the last update, we are done
                 if (new Date(response.data[response.data.length - 1].updated_at) < this._lastUpdateOn) {
                     satisfied = true;
@@ -134,11 +133,6 @@ export class GithubService extends Service {
                 console.log(`Got ${response.data.length} PRs (page ${page}, total ${rawPulls?.length ?? 0})`);
             }
 
-            // set last update to the last pull request
-            if (response.data.length > 0) {
-                this._lastUpdateOn = new Date(response.data[response.data.length - 1].updated_at);
-            }
-
             // wait 5 seconds before next request
             if(!satisfied) {
                 console.log('Waiting 5 seconds before next request...');
@@ -147,7 +141,7 @@ export class GithubService extends Service {
         }
 
         // Process the raw pulls
-        let pulls: (PullRequestInfo | undefined | null)[] = (await Promise.all(rawPulls!.map(async (raw)  => {
+        let pulls: (PullRequestInfo)[] = (await Promise.all(rawPulls!.map(async (raw)  => {
             let state: PullRequestState;
             let author: PullRequestAuthorInfo | undefined = undefined;
             let date: Date;
@@ -173,11 +167,6 @@ export class GithubService extends Service {
                     throw new Error(`Unknown PR state: ${raw.state}`);
             }
 
-            // discard PRs older than the update threshold
-            if(date < this._lastUpdateOn) {
-                return null;
-            }
-
             const authorLogin = raw.user?.login;
             if (authorLogin) {
                 if (!users[authorLogin]) {
@@ -196,15 +185,23 @@ export class GithubService extends Service {
                 number: raw.number,
                 title: raw.title,
                 url: raw.html_url,
-                updatedAt: new Date(raw.updated_at),
+                updatedAt: date,
                 state: state,
                 author: author!,
             };
             return data;
         })));
 
-        // console.log(pulls);
-        return pulls.filter((pr) => pr !== null && pr !== undefined) as PullRequestInfo[];
+        // Discard PRs that are older than the last update
+        pulls = pulls.filter((pr) => {
+            // console.log(`Updated at: ${pr.updatedAt.toUTCString()} vs Last update: ${this._lastUpdateOn.toUTCString()}`);
+            return pr.updatedAt >= this._lastUpdateOn;
+        });
+
+        // Update last update time
+        this._lastUpdateOn = new Date();
+
+        return pulls;
     }
 
     private async _githubUserToPullRequestAuthorInfo(user: GithubUser): Promise<PullRequestAuthorInfo> {
