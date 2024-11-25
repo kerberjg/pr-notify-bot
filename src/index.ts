@@ -14,8 +14,8 @@ interface Settings {
 	BSKY_PASSWORD: string;
 	REPO_OWNER: string;
 	REPO_NAME: string;
-	/// Poll interval in seconds
-	POLL_INTERVAL: number;
+	/// Crontab interval
+	CRON_POLL_INTERVAL: string;
 	/// ISO timestamp of the last time we checked for PRs
 	START_FROM?: string;
 }
@@ -33,8 +33,8 @@ const settings: Settings = {
 	BSKY_PASSWORD: process.env.BSKY_PASSWORD!,
 	REPO_OWNER: process.env.REPO_OWNER!,
 	REPO_NAME: process.env.REPO_NAME!,
-	POLL_INTERVAL: parseInt(process.env.POLL_INTERVAL!),
-	START_FROM: process.env.START_FROM
+	CRON_POLL_INTERVAL: process.env.CRON_POLL_INTERVAL!,
+	START_FROM: process.env.START_FROM,
 };
 
 
@@ -70,7 +70,7 @@ try {
 }
 
 console.log(`Services initialized at ${new Date()}`);
-console.log(`Will check for new PRs every ${settings.POLL_INTERVAL} seconds`);
+console.log(`Will check for new PRs with crontab: ${settings.CRON_POLL_INTERVAL}`);
 
 let mutex: boolean = false;
 
@@ -83,13 +83,19 @@ async function update(): Promise<void> {
 		mutex = true;
 	}
 
-
 	let startFrom: Date | undefined = settings.START_FROM ? new Date(settings.START_FROM) : undefined;
 
 	console.log(`Polling for new PRs...`);
-	const prs = await github.getPullRequests(settings.REPO_OWNER, settings.REPO_NAME, startFrom);
-	// const prs: PullRequestInfo[] = [];
-	console.log(`Found ${prs.length} open PRs`);
+	let prs;
+	try {
+		prs = await github.getPullRequests(settings.REPO_OWNER, settings.REPO_NAME, startFrom);
+		// const prs: PullRequestInfo[] = [];
+		console.log(`Found ${prs.length} open PRs`);
+	} catch (e) {
+		console.error('Failed to fetch PRs:', e);
+		mutex = false;
+		return;
+	}
 
 	// // debug fake PR
 	// prs.push({
@@ -106,117 +112,125 @@ async function update(): Promise<void> {
 	// 	}
 	// });
 
-	let b: RichtextBuilder | undefined;
-	for(const pr of prs) {
-		console.log(pr);
+	try {
 
-		let bskyId: string | undefined;
-		if(pr.author.bsky) {
-			bskyId = (await bluesky.agent.resolveHandle({ handle: pr.author.bsky })).data.did;
-			console.log(`Resolved Bluesky ID for ${pr.author.bsky}: ${bskyId}`);
-		}
+		let b: RichtextBuilder | undefined;
+		for(const pr of prs) {
+			console.log(pr);
 
-		switch(pr.state) {
-			case PullRequestState.open:
-				b = new RichtextBuilder()
-					.addText(`💚 "${pr.title}"`)
-					.addText(' ')
-					.addLink(`[${settings.REPO_OWNER}/${settings.REPO_NAME}#${pr.number}]`, pr.url)
-					.addText('\n')
-					.addText(`opened by `);
-
-				if(bskyId) {
-					b.addMention(`@${pr.author.bsky}`, bskyId as any);
-				} else {
-					const link = resolveSocialHandle(pr.author);
-					b.addLink(link, pr.author.url);
-				}
-
-				b.addText(` is waiting for review ✨`);
-				break;
-			case PullRequestState.closed:
-				b = new RichtextBuilder()
-					.addText(`❌ "${pr.title}"`)
-					.addText(' ')
-					.addLink(`[${settings.REPO_OWNER}/${settings.REPO_NAME}#${pr.number}]`, pr.url)
-					.addText('\n')
-					.addText(`by `);
-
-				if(bskyId) {
-					b.addMention(`@${pr.author.bsky}`, bskyId as any);
-				} else {
-					const link = resolveSocialHandle(pr.author);
-					b.addLink(link, pr.author.url);
-				}
-
-				b.addText(` was closed without merging 😔`);
-				break;
-			case PullRequestState.merged:
-				b = new RichtextBuilder()
-					.addText(`🎉 "${pr.title}"`)
-					.addText(' ')
-					.addLink(`[${settings.REPO_OWNER}/${settings.REPO_NAME}#${pr.number}]`, pr.url)
-					.addText('\n')
-					.addText(`by `);
-
-				if(bskyId) {
-					b.addMention(`@${pr.author.bsky}`, bskyId as any);
-				} else {
-					const link = resolveSocialHandle(pr.author);
-					b.addLink(link, pr.author.url);
-				}
-
-				b.addText(` was merged! Hooray! 🥰`);
-				break;
-			case PullRequestState.draft:
-				// We do nothing if it's a draft PR
-				// text = `📝 "${pr.title}"
-				//	([${settings.REPO_OWNER}/${settings.REPO_NAME}#${pr.number}](${pr.url}))
-				//	by ${resolveSocialHandle(pr.author)} is a draft PR!
-				//	It's being worked on, hold on tight 👀
-				//`;
-				break; 
-		}
-
-		if(b !== undefined) {
-			const { text, facets } = b.build();
-			const rt = new RichText({ text, facets: facets as any });
-			// Print the message to the console
-			console.log(text);
-			// console.log(JSON.stringify(facets, null, 2));
-
-			// Post to Bluesky if we're in production
-			if(process.env.NODE_ENV === 'production') {
-				// console.log(`Detecting facets...`);
-				// await rt.detectFacets(bluesky.agent);
-
-				const post: Skeet = {
-					$type: 'app.bsky.feed.post',
-					// text: rt.text,
-					// facets: rt.facets,
-					text: text as any,
-					facets: facets as any,
-					createdAt: new Date().toISOString(),
-					embed: await prEmbedToBskyEmbed(await getPullRequestEmbed(pr), bluesky.agent),
-				}
-
-				console.log(`Posting to Bluesky...`);
-				const uri = await bluesky.post(post);
-				console.log(`Posted at ${uri}`);
-			}
-			// Skip posting if we're not in production
-			else {
-				console.log(`[dev] Not posting, we're in development mode`);
+			let bskyId: string | undefined;
+			if(pr.author.bsky) {
+				bskyId = (await bluesky.agent.resolveHandle({ handle: pr.author.bsky })).data.did;
+				console.log(`Resolved Bluesky ID for ${pr.author.bsky}: ${bskyId}`);
 			}
 
-			// Wait X seconds before posting the next PR
-			console.log(`Waiting 3 seconds before posting the next skeet...`);
-			await new Promise(resolve => setTimeout(resolve, 3000));
+			switch(pr.state) {
+				case PullRequestState.open:
+					b = new RichtextBuilder()
+						.addText(`💚 "${pr.title}"`)
+						.addText(' ')
+						.addLink(`[${settings.REPO_OWNER}/${settings.REPO_NAME}#${pr.number}]`, pr.url)
+						.addText('\n')
+						.addText(`opened by `);
+
+					if(bskyId) {
+						b.addMention(`@${pr.author.bsky}`, bskyId as any);
+					} else {
+						const link = resolveSocialHandle(pr.author);
+						b.addLink(link, pr.author.url);
+					}
+
+					b.addText(` is waiting for review ✨`);
+					break;
+				case PullRequestState.closed:
+					b = new RichtextBuilder()
+						.addText(`❌ "${pr.title}"`)
+						.addText(' ')
+						.addLink(`[${settings.REPO_OWNER}/${settings.REPO_NAME}#${pr.number}]`, pr.url)
+						.addText('\n')
+						.addText(`by `);
+
+					if(bskyId) {
+						b.addMention(`@${pr.author.bsky}`, bskyId as any);
+					} else {
+						const link = resolveSocialHandle(pr.author);
+						b.addLink(link, pr.author.url);
+					}
+
+					b.addText(` was closed without merging 😔`);
+					break;
+				case PullRequestState.merged:
+					b = new RichtextBuilder()
+						.addText(`🎉 "${pr.title}"`)
+						.addText(' ')
+						.addLink(`[${settings.REPO_OWNER}/${settings.REPO_NAME}#${pr.number}]`, pr.url)
+						.addText('\n')
+						.addText(`by `);
+
+					if(bskyId) {
+						b.addMention(`@${pr.author.bsky}`, bskyId as any);
+					} else {
+						const link = resolveSocialHandle(pr.author);
+						b.addLink(link, pr.author.url);
+					}
+
+					b.addText(` was merged! Hooray! 🥰`);
+					break;
+				case PullRequestState.draft:
+					// We do nothing if it's a draft PR
+					// text = `📝 "${pr.title}"
+					//	([${settings.REPO_OWNER}/${settings.REPO_NAME}#${pr.number}](${pr.url}))
+					//	by ${resolveSocialHandle(pr.author)} is a draft PR!
+					//	It's being worked on, hold on tight 👀
+					//`;
+					break; 
+			}
+
+			if(b !== undefined) {
+				const { text, facets } = b.build();
+				const rt = new RichText({ text, facets: facets as any });
+				// Print the message to the console
+				console.log(text);
+				// console.log(JSON.stringify(facets, null, 2));
+
+				// Post to Bluesky if we're in production
+				if(process.env.NODE_ENV === 'production') {
+					// console.log(`Detecting facets...`);
+					// await rt.detectFacets(bluesky.agent);
+
+					const post: Skeet = {
+						$type: 'app.bsky.feed.post',
+						// text: rt.text,
+						// facets: rt.facets,
+						text: text as any,
+						facets: facets as any,
+						createdAt: new Date().toISOString(),
+						embed: await prEmbedToBskyEmbed(await getPullRequestEmbed(pr), bluesky.agent),
+					}
+
+					console.log(`Posting to Bluesky...`);
+					const uri = await bluesky.post(post);
+					console.log(`Posted at ${uri}`);
+				}
+				// Skip posting if we're not in production
+				else {
+					console.log(`[dev] Not posting, we're in development mode`);
+				}
+
+				// Wait X seconds before posting the next PR
+				console.log(`Waiting 3 seconds before posting the next skeet...`);
+				await new Promise(resolve => setTimeout(resolve, 3000));
+			}
+			
 		}
-		
+
+		console.log(`Finished posting PRs, will check again in crontab ${settings.CRON_POLL_INTERVAL}`);
+	} catch (e) {
+		console.error('Failed to post PRs:', e);
+		mutex = false;
 	}
 
-	console.log(`Finished posting PRs, will check again in ${settings.POLL_INTERVAL} seconds`);
+	mutex = false;
 }
 
 async function prEmbedToBskyEmbed(prEmbed: PullRequestEmbed, agent: AtpAgent.AtpAgent): Promise<any> {
@@ -237,13 +251,11 @@ async function prEmbedToBskyEmbed(prEmbed: PullRequestEmbed, agent: AtpAgent.Atp
 	}
 }
 
-// Start the cron job
+// Start the cron job, every POLL_INTERVAL_MINUTES seconds
 const job = new CronJob(
-	`*/${settings.POLL_INTERVAL} * * * *`,
+	settings.CRON_POLL_INTERVAL,
 	update,
-	() => {		// onComplete
-		mutex = false;
-	},
+	null,
 	true, // start
 	process.env.TZ ?? 'UTC',
 	null,
