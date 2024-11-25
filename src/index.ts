@@ -22,6 +22,11 @@ interface Settings {
 
 // Load settings from .env file or environment variables
 dotenv.config();
+if(process.env.NODE_ENV !== 'production') {
+	console.log('Loaded settings:');
+	console.log(process.env);
+}
+
 const settings: Settings = {
 	GITHUB_TOKEN: process.env.GITHUB_TOKEN!,
 	BSKY_USERNAME: process.env.BSKY_USERNAME!,
