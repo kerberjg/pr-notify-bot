@@ -95,6 +95,7 @@ export class GithubService extends Service {
     /// Gets the pull requests for a given repository since the last update
     public async getPullRequests(owner: string, repo: string, startFrom?: Date): Promise<PullRequestInfo[]> {
         const since = (startFrom ?? this._lastUpdateOn).toISOString();
+        console.log(`Fetching PRs since ${since}`);
 
         // Cache users
         const users: Record<string, PullRequestAuthorInfo> = {};
@@ -279,12 +280,9 @@ export async function getPullRequestEmbed(pr: PullRequestInfo): Promise<PullRequ
     });
 
     const text = await response.text();
+    // console.log(text);
 
-    console.log(text);
-
-    // Use cheerio as a DOM parser
     const $ = cheerio.load(text);
-
     return {
         url: pr.url,
         title: $('meta[name="og:title"]').attr('content') ?? pr.title,

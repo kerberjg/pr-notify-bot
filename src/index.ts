@@ -183,11 +183,11 @@ async function update(): Promise<void> {
 			const rt = new RichText({ text, facets: facets as any });
 			// Print the message to the console
 			console.log(text);
-			console.log(JSON.stringify(facets, null, 2));
+			// console.log(JSON.stringify(facets, null, 2));
 
 			// Post to Bluesky if we're in production
 			if(process.env.NODE_ENV === 'production') {
-				console.log(`Detecting facets...`);
+				// console.log(`Detecting facets...`);
 				// await rt.detectFacets(bluesky.agent);
 
 				const post: Skeet = {
@@ -202,7 +202,7 @@ async function update(): Promise<void> {
 
 				console.log(`Posting to Bluesky...`);
 				const uri = await bluesky.post(post);
-				console.log(`Posted to Bluesky: ${uri}`);
+				console.log(`Posted at ${uri}`);
 			}
 			// Skip posting if we're not in production
 			else {
