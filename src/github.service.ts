@@ -201,12 +201,21 @@ export class GithubService extends Service {
 
         // Discard PRs that are older than the last update
         pulls = pulls.filter((pr) => {
-            console.log(`Updated at: ${pr.updatedAt.toUTCString()} vs Last update: ${this._lastUpdateOn.toUTCString()}`);
-            return pr.updatedAt >= this._lastUpdateOn;
+            const result = pr.updatedAt > this._lastUpdateOn;
+            console.log(`(#${pr.number}) PR: ${pr.updatedAt.toUTCString()} > Last update: ${this._lastUpdateOn.toUTCString()} (result: ${result})`);
+            return result;
         });
 
-        // Update last update time
-        this._lastUpdateOn = new Date();
+        // Set the last update time to the latest PR added
+        const oldSince = this._lastUpdateOn;
+        this._lastUpdateOn = pulls.reduce(
+            (max, pr) => pr.updatedAt > max ? pr.updatedAt : max,
+            this._lastUpdateOn
+        );
+
+        if(this._lastUpdateOn > oldSince) {
+            console.log(`Set 'Last update' marker to: ${this._lastUpdateOn.toUTCString()} (was: ${oldSince.toUTCString()})`);
+        }
 
         return pulls;
     }
