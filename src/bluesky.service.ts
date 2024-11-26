@@ -34,7 +34,12 @@ export class BlueskyService extends Service {
         const buffer = await res.arrayBuffer();
 
         // Upload buffer to Bluesky
-        const { data } = await this.agent.uploadBlob(new Uint8Array(buffer));
+        const { data } = await this.agent.uploadBlob(
+            new Uint8Array(buffer),
+            {
+                encoding: 'image/png',
+            }
+        );
         return data.blob;
     }
 }
