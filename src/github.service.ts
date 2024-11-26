@@ -68,10 +68,10 @@ export class GithubService extends Service {
     private _lastUpdateOn: Date;
     private _ignoreUsers: string[];
 
-    constructor(token: string, ignoreUsers: string[] = []) {
+    constructor(token: string, ignoreUsers: string[] = [], startFrom?: Date) {
         super();
         this._token = token;
-        this._lastUpdateOn = new Date();
+        this._lastUpdateOn = startFrom ?? new Date();
         this._ignoreUsers = ignoreUsers;
     }
 
@@ -95,8 +95,8 @@ export class GithubService extends Service {
     }
 
     /// Gets the pull requests for a given repository since the last update
-    public async getPullRequests(owner: string, repo: string, startFrom?: Date): Promise<PullRequestInfo[]> {
-        const since = (startFrom ?? this._lastUpdateOn).toISOString();
+    public async getPullRequests(owner: string, repo: string): Promise<PullRequestInfo[]> {
+        const since = this._lastUpdateOn.toISOString();
         console.log(`Fetching PRs since ${since}`);
 
         // Cache users
@@ -201,7 +201,7 @@ export class GithubService extends Service {
 
         // Discard PRs that are older than the last update
         pulls = pulls.filter((pr) => {
-            // console.log(`Updated at: ${pr.updatedAt.toUTCString()} vs Last update: ${this._lastUpdateOn.toUTCString()}`);
+            console.log(`Updated at: ${pr.updatedAt.toUTCString()} vs Last update: ${this._lastUpdateOn.toUTCString()}`);
             return pr.updatedAt >= this._lastUpdateOn;
         });
 

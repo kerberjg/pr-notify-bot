@@ -48,6 +48,7 @@ console.log('Initializing services...');
 const github = new GithubService(
 	settings.GITHUB_TOKEN,
 	settings.IGNORE_USERS ? settings.IGNORE_USERS.split(',') : undefined,
+	settings.START_FROM ? new Date(settings.START_FROM) : undefined
 );
 const bluesky = new BlueskyService({
 	identifier: settings.BSKY_USERNAME,
@@ -88,12 +89,10 @@ async function update(): Promise<void> {
 		mutex = true;
 	}
 
-	let startFrom: Date | undefined = settings.START_FROM ? new Date(settings.START_FROM) : undefined;
-
 	console.log(`Polling for new PRs...`);
 	let prs;
 	try {
-		prs = await github.getPullRequests(settings.REPO_OWNER, settings.REPO_NAME, startFrom);
+		prs = await github.getPullRequests(settings.REPO_OWNER, settings.REPO_NAME);
 		// const prs: PullRequestInfo[] = [];
 		console.log(`Found ${prs.length} open PRs`);
 	} catch (e) {
