@@ -18,6 +18,7 @@ interface Settings {
 	CRON_POLL_INTERVAL: string;
 	/// ISO timestamp of the last time we checked for PRs
 	START_FROM?: string;
+	IGNORE_USERS?: string;
 }
 
 // Load settings from .env file or environment variables
@@ -35,6 +36,7 @@ const settings: Settings = {
 	REPO_NAME: process.env.REPO_NAME!,
 	CRON_POLL_INTERVAL: process.env.CRON_POLL_INTERVAL!,
 	START_FROM: process.env.START_FROM,
+	IGNORE_USERS: process.env.IGNORE_USERS,
 };
 
 
@@ -43,7 +45,10 @@ const settings: Settings = {
 console.log(`pr-notify-bot, v${process.env.npm_package_version}`);
 console.log('Initializing services...');
 
-const github = new GithubService(settings.GITHUB_TOKEN);
+const github = new GithubService(
+	settings.GITHUB_TOKEN,
+	settings.IGNORE_USERS ? settings.IGNORE_USERS.split(',') : undefined,
+);
 const bluesky = new BlueskyService({
 	identifier: settings.BSKY_USERNAME,
 	password: settings.BSKY_PASSWORD,

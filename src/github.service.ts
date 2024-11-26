@@ -66,11 +66,13 @@ export class GithubService extends Service {
     private _client?: Octokit;
 
     private _lastUpdateOn: Date;
+    private _ignoreUsers: string[];
 
-    constructor(token: string) {
+    constructor(token: string, ignoreUsers: string[] = []) {
         super();
         this._token = token;
         this._lastUpdateOn = new Date();
+        this._ignoreUsers = ignoreUsers;
     }
 
     protected async onInit(): Promise<void> {
@@ -191,6 +193,11 @@ export class GithubService extends Service {
             };
             return data;
         })));
+
+        // Discard PRs from ignored users
+        pulls = pulls.filter((pr) => {
+            return !this._ignoreUsers.includes(pr.author.username);
+        });
 
         // Discard PRs that are older than the last update
         pulls = pulls.filter((pr) => {
